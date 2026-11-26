@@ -25,15 +25,31 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
+def create_tion_api(email: str, password: str) -> TionApi:
+    """Create TionApi instance compatible with multiple library versions.
+
+    Older versions of the `tion` library used `save_auth`, newer versions
+    use `auth_fname`. Some versions accept neither explicitly.
+    """
+    try:
+        return TionApi(email, password, auth_fname=None)
+    except TypeError:
+        _LOGGER.debug("auth_fname not supported, falling back to save_auth")
+        try:
+            return TionApi(email, password, save_auth=False)
+        except TypeError:
+            _LOGGER.debug("Neither auth_fname nor save_auth supported, using defaults")
+            return TionApi(email, password)
+
+
 class TionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Coordinator to fetch data from the Tion cloud API."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         """Initialize the coordinator."""
-        self._email = entry.data[CONF_EMAIL]
-        self._password = entry.data[CONF_PASSWORD]
+        self._email: str = entry.data[CONF_EMAIL]
+        self._password: str = entry.data[CONF_PASSWORD]
         self._api: TionApi | None = None
-        # Кэш объектов устройств: guid -> device
         self._devices: dict[str, Any] = {}
 
         super().__init__(
@@ -61,12 +77,14 @@ class TionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         try:
             return await self.hass.async_add_executor_job(self._fetch_data_sync)
         except Exception as err:
-            raise UpdateFailed(f"Error communicating with Tion API: {err}") from err
+            raise UpdateFailed(
+                f"Error communicating with Tion API: {err}"
+            ) from err
 
     def _fetch_data_sync(self) -> dict[str, Any]:
-        """Synchronous data fetch, run in the executor."""
+        """Synchronous data fetch, runs in the executor."""
         if self._api is None:
-            self._api = TionApi(self._email, self._password, save_auth=False)
+            self._api = create_tion_api(self._email, self._password)
 
         devices = self._api.get_devices()
 
@@ -87,11 +105,11 @@ class TionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 data[guid] = {
                     "type": "breezer",
                     "name": getattr(device, "name", "Tion Breezer"),
-                    "is_on": device.is_on,
-                    "speed": device.speed,
+                    "is_on": getattr(device, "is_on", False),
+                    "speed": getattr(device, "speed", None),
                     "mode": (
                         getattr(device.zone, "mode", "manual")
-                        if device.zone
+                        if getattr(device, "zone", None)
                         else "manual"
                     ),
                     "current_temperature": getattr(device, "in_temp", None),

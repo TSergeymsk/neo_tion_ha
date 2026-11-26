@@ -11,7 +11,8 @@
       }
     },
     "error": {
-      "invalid_auth": "Invalid email or password.",
+      "invalid_auth": "Invalid email or password, or the Tion cloud rejected the request.",
+      "no_devices": "Authentication succeeded, but no devices are linked to the account.",
       "unknown": "Unexpected error. Check the logs."
     },
     "abort": {

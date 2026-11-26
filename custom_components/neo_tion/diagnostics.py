@@ -16,6 +16,10 @@ async def async_get_config_entry_diagnostics(
     return {
         "entry_data": dict(entry.data),
         "last_update_success": coordinator.last_update_success,
-        "last_exception": str(coordinator.last_exception) if coordinator.last_exception else None,
+        "last_exception": (
+            str(coordinator.last_exception)
+            if coordinator.last_exception
+            else None
+        ),
         "devices": coordinator.data,
     }

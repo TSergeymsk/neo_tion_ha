@@ -38,7 +38,9 @@ async def async_setup_entry(
 
     for guid, data in coordinator.data.items():
         if data.get("type") == "breezer":
-            entities.append(TionBreezerClimate(coordinator, guid, data["name"]))
+            entities.append(
+                TionBreezerClimate(coordinator, guid, data["name"])
+            )
 
     async_add_entities(entities)
 

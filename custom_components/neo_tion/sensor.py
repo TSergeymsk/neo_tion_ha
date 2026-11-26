@@ -1,4 +1,4 @@
-"""Sensor platform for Neo Tion MagicAir and breezer diagnostics."""
+"""Sensor platform for Neo Tion MagicAir."""
 
 from __future__ import annotations
 

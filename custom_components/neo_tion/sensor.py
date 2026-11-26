@@ -92,15 +92,12 @@ class TionSensor(TionEntity, SensorEntity):
 
     @property
     def icon(self) -> str | None:
+        """Динамические иконки с цифровыми индикаторами скорости (0–6)."""
         if self._data_key == "speed":
-            speed = self.native_value or 0
-            if speed == 0:
-                return "mdi:power"
-            if speed <= 2:
-                return "mdi:fan-speed-1"
-            if speed <= 4:
-                return "mdi:fan-speed-2"
-            return "mdi:fan-speed-3"
+            speed = int(self.native_value or 0)
+            if 0 <= speed <= 6:
+                return f"mdi:numeric-{speed}-circle-outline"
+            return "mdi:fan"
 
         icons = {
             "current_temperature": "mdi:home-thermometer",

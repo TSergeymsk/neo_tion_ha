@@ -36,6 +36,24 @@ def create_tion_api(email: str, password: str) -> TionApi:
             return TionApi(email, password)
 
 
+def _extract_temp(device: Any, *keys: str) -> float | int | None:
+    """Извлекает температуру из верхнего уровня или вложенных state/data."""
+    # 1. Поиск на верхнем уровне объекта
+    for key in keys:
+        val = getattr(device, key, None)
+        if val is not None:
+            return val
+    # 2. Поиск во вложенных словарях state / data
+    for container_name in ("state", "data"):
+        container = getattr(device, container_name, None)
+        if isinstance(container, dict):
+            for key in keys:
+                val = container.get(key)
+                if val is not None:
+                    return val
+    return None
+
+
 class TionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Coordinator to fetch data from the Tion cloud API."""
 
@@ -64,7 +82,6 @@ class TionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             raise UpdateFailed(f"Error communicating with Tion API: {err}") from err
 
     def _fetch_data_sync(self) -> dict[str, Any]:
-        # Переиспользуем единый экземпляр API для сохранения сессии и токенов
         if self._api is None:
             self._api = create_tion_api(self._email, self._password)
 
@@ -81,26 +98,27 @@ class TionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             cls_name = device.__class__.__name__
 
             if cls_name == "Breezer":
-                # Скорости берем напрямую с объекта бризера
-                speed = int(getattr(device, "speed", 0))
-                min_speed = int(getattr(device, "speed_min_set", 0))
-                max_speed = int(getattr(device, "speed_max_set", getattr(device, "speed_limit", 6)))
-                
-                # Температуры берем с верхнего уровня объекта
-                in_temp = getattr(device, "in_temp", None)
-                out_temp = getattr(device, "out_temp", None)
-                heater_temp = getattr(device, "heater_temp", None)
-                
                 zone = getattr(device, "zone", None)
                 swing = getattr(device, "swing", None)
                 
+                # Извлекаем температуры каскадно
+                in_temp = _extract_temp(device, "in_temp", "temperature", "temp_in")
+                out_temp = _extract_temp(device, "out_temp", "temp_out")
+                heater_temp = _extract_temp(device, "heater_temp", "target_temperature")
+                
+                # Скорости
+                speed = int(getattr(device, "speed", 0))
+                min_speed = int(getattr(device, "speed_min_set", getattr(zone, "min_speed", 0) if zone else 0))
+                max_speed = int(getattr(device, "speed_max_set", getattr(device, "speed_limit", 6)))
+                
+                # Жалюзи
                 swing_val = str(getattr(swing, "mode", "horizontal")).lower() if swing else "horizontal"
                 if swing_val in ("vertical", "indoor"):
                     swing_val = "indoor"
                 elif swing_val in ("horizontal", "outdoor"):
                     swing_val = "outdoor"
                 elif swing_val == "off":
-                    swing_val = "indoor" # По умолчанию при выключении/сбросе
+                    swing_val = "indoor"
 
                 data[guid] = {
                     "type": "breezer",
@@ -128,6 +146,5 @@ class TionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return data
 
     async def async_fast_refresh(self) -> None:
-        """Увеличенная пауза для защиты от rate limit облака."""
         await asyncio.sleep(8)
         await self.async_request_refresh()

@@ -1,0 +1,61 @@
+set_auto_mode:
+  name: Set Auto Mode (CO2)
+  description: Configure the auto ventilation mode based on CO2 levels.
+  target:
+    entity:
+      domain: climate
+      integration: neo_tion
+  fields:
+    target_co2:
+      name: Target CO2
+      description: Desired CO2 level in ppm.
+      required: true
+      example: 800
+      selector:
+        number:
+          min: 400
+          max: 2000
+          unit_of_measurement: ppm
+    min_speed:
+      name: Minimum Speed
+      description: Minimum fan speed (0-6).
+      required: false
+      default: 1
+      selector:
+        number:
+          min: 0
+          max: 6
+    max_speed:
+      name: Maximum Speed
+      description: Maximum fan speed (0-6).
+      required: false
+      default: 6
+      selector:
+        number:
+          min: 0
+          max: 6
+
+set_heater:
+  name: Set Heater
+  description: Configure the heater settings for the breezer.
+  target:
+    entity:
+      domain: climate
+      integration: neo_tion
+  fields:
+    heater_enabled:
+      name: Heater Enabled
+      description: Turn the heater on or off.
+      required: true
+      selector:
+        boolean:
+    target_temperature:
+      name: Target Temperature
+      description: Desired heating temperature.
+      required: false
+      example: 22
+      selector:
+        number:
+          min: 10
+          max: 30
+          unit_of_measurement: °C

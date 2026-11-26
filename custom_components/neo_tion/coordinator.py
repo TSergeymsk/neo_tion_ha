@@ -30,11 +30,9 @@ def create_tion_api(email: str, password: str) -> TionApi:
     try:
         return TionApi(email, password, auth_fname=None)
     except TypeError:
-        _LOGGER.debug("auth_fname not supported, falling back to save_auth")
         try:
             return TionApi(email, password, save_auth=False)
         except TypeError:
-            _LOGGER.debug("Neither auth_fname nor save_auth supported, using defaults")
             return TionApi(email, password)
 
 
@@ -42,7 +40,6 @@ class TionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Coordinator to fetch data from the Tion cloud API."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
-        """Initialize the coordinator."""
         self._email: str = entry.data[CONF_EMAIL]
         self._password: str = entry.data[CONF_PASSWORD]
         self._api: TionApi | None = None
@@ -57,38 +54,24 @@ class TionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
     @property
-    def api(self) -> TionApi:
-        """Return the initialized Tion API client."""
-        if self._api is None:
-            raise RuntimeError("Tion API not initialized yet")
-        return self._api
-
-    @property
     def devices(self) -> dict[str, Any]:
-        """Return cached device objects keyed by guid."""
         return self._devices
 
     async def _async_update_data(self) -> dict[str, Any]:
-        """Fetch data from the Tion API in the executor (library is sync)."""
         try:
             return await self.hass.async_add_executor_job(self._fetch_data_sync)
         except Exception as err:
-            raise UpdateFailed(
-                f"Error communicating with Tion API: {err}"
-            ) from err
+            raise UpdateFailed(f"Error communicating with Tion API: {err}") from err
 
     def _fetch_data_sync(self) -> dict[str, Any]:
-        """Synchronous data fetch, runs in the executor."""
         if self._api is None:
             self._api = create_tion_api(self._email, self._password)
 
         devices = self._api.get_devices()
-
         self._devices = {}
+        
         for device in devices:
-            guid = getattr(device, "guid", None) or getattr(
-                device, "device_guid", None
-            )
+            guid = getattr(device, "guid", None) or getattr(device, "device_guid", None)
             if guid:
                 self._devices[guid] = device
 
@@ -97,18 +80,26 @@ class TionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             cls_name = device.__class__.__name__
 
             if cls_name == "Breezer":
+                # Извлекаем данные зоны (если бризер связан с MagicAir)
+                zone = getattr(device, "zone", None)
+                zone_mode = getattr(zone, "mode", "manual") if zone else "manual"
+                target_co2 = getattr(zone, "target_co2", None) if zone else None
+                min_speed = getattr(zone, "min_speed", 1) if zone else 1
+                max_speed = getattr(zone, "max_speed", 6) if zone else 6
+
                 data[guid] = {
                     "type": "breezer",
                     "name": getattr(device, "name", "Tion Breezer"),
                     "is_on": getattr(device, "is_on", False),
-                    "speed": getattr(device, "speed", None),
-                    "mode": (
-                        getattr(device.zone, "mode", "manual")
-                        if getattr(device, "zone", None)
-                        else "manual"
-                    ),
+                    "speed": getattr(device, "speed", 0),
+                    "zone_mode": zone_mode,
+                    "target_co2": target_co2,
+                    "min_speed": min_speed,
+                    "max_speed": max_speed,
                     "current_temperature": getattr(device, "in_temp", None),
                     "target_temperature": getattr(device, "heater_temp", None),
+                    "out_temperature": getattr(device, "out_temp", None),
+                    "heater_enabled": getattr(device, "heater_enabled", False),
                 }
             elif cls_name == "MagicAir":
                 data[guid] = {
@@ -119,3 +110,9 @@ class TionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "humidity": getattr(device, "humidity", None),
                 }
         return data
+
+    async def async_fast_refresh(self) -> None:
+        """Обновление через короткий промежуток времени для обратной связи."""
+        import asyncio
+        await asyncio.sleep(2)  # Ждем, пока облако Tion обработает команду
+        await self.async_request_refresh()

@@ -10,11 +10,6 @@ from homeassistant.components.climate import (
     ClimateEntityFeature,
     HVACMode,
 )
-from homeassistant.components.climate.const import (
-    SWING_HORIZONTAL,
-    SWING_VERTICAL,
-    SWING_BOTH,
-)
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -25,6 +20,9 @@ from .entity import TionEntity
 _LOGGER = logging.getLogger(__name__)
 
 FAN_MODES = ["1", "2", "3", "4", "5", "6"]
+SWING_INDOOR = "indoor"
+SWING_OUTDOOR = "outdoor"
+SWING_BOTH = "both"
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -49,8 +47,7 @@ class TionBreezerClimate(TionEntity, ClimateEntity):
     _attr_min_temp = 10
     _attr_max_temp = 30
     _attr_fan_modes = FAN_MODES
-    # Убрали SWING_OFF
-    _attr_swing_modes = [SWING_HORIZONTAL, SWING_VERTICAL, SWING_BOTH]
+    _attr_swing_modes = [SWING_INDOOR, SWING_OUTDOOR, SWING_BOTH]
     _attr_hvac_modes = [HVACMode.OFF, HVACMode.FAN_ONLY, HVACMode.AUTO]
     _attr_supported_features = (
         ClimateEntityFeature.TARGET_TEMPERATURE
@@ -90,20 +87,15 @@ class TionBreezerClimate(TionEntity, ClimateEntity):
 
     @property
     def swing_mode(self) -> str:
-        mode = self._device_data.get("swing_mode", "horizontal").lower()
-        if mode in ["vertical", "indoor"]:
-            return SWING_VERTICAL
-        if mode in ["both"]:
-            return SWING_BOTH
-        return SWING_HORIZONTAL  # default
+        return self._device_data.get("swing_mode", SWING_OUTDOOR)
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         if hvac_mode == HVACMode.OFF:
             await self._send_command("set_speed", 0)
-            await self._send_command("set_swing", "horizontal")
+            await self._send_command("set_swing", SWING_OUTDOOR)
         elif hvac_mode == HVACMode.AUTO:
             await self._send_command("set_zone_mode", "auto")
-            await self._send_command("set_swing", "horizontal")
+            await self._send_command("set_swing", SWING_OUTDOOR)
         else:
             await self._send_command("set_zone_mode", "manual")
             await self._send_command("set_speed", self._last_speed)
@@ -116,13 +108,11 @@ class TionBreezerClimate(TionEntity, ClimateEntity):
         await self._send_command("set_zone_mode", "manual")
 
     async def async_set_swing_mode(self, swing_mode: str) -> None:
-        # Мапим стандартные значения HA в строки для API tion
-        if swing_mode == SWING_HORIZONTAL:
-            target = "horizontal"
-        elif swing_mode == SWING_VERTICAL:
+        target = swing_mode
+        if swing_mode == "indoor":
             target = "vertical"
-        else:
-            target = "both"
+        elif swing_mode == "outdoor":
+            target = "horizontal"
         await self._send_command("set_swing", target)
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
@@ -134,7 +124,7 @@ class TionBreezerClimate(TionEntity, ClimateEntity):
 
     async def async_turn_off(self) -> None:
         await self._send_command("set_speed", 0)
-        await self._send_command("set_swing", "horizontal")
+        await self._send_command("set_swing", SWING_OUTDOOR)
 
     async def _send_command(self, command: str, value: Any) -> None:
         await self.hass.async_add_executor_job(self._send_command_sync, command, value)
@@ -149,6 +139,7 @@ class TionBreezerClimate(TionEntity, ClimateEntity):
             device.speed = int(value)
         elif command == "set_temperature":
             device.heater_temp = int(value)
+            device.heater = True # Включаем обогрев при изменении целевой температуры
         elif command == "set_zone_mode":
             if getattr(device, "zone", None):
                 device.zone.mode = value

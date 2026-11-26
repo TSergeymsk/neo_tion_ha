@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import asyncio
 from datetime import timedelta
 from typing import Any
 
@@ -63,6 +64,7 @@ class TionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             raise UpdateFailed(f"Error communicating with Tion API: {err}") from err
 
     def _fetch_data_sync(self) -> dict[str, Any]:
+        # Переиспользуем единый экземпляр API для сохранения сессии и токенов
         if self._api is None:
             self._api = create_tion_api(self._email, self._password)
 
@@ -79,40 +81,40 @@ class TionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             cls_name = device.__class__.__name__
 
             if cls_name == "Breezer":
+                # Скорости берем напрямую с объекта бризера
+                speed = int(getattr(device, "speed", 0))
+                min_speed = int(getattr(device, "speed_min_set", 0))
+                max_speed = int(getattr(device, "speed_max_set", getattr(device, "speed_limit", 6)))
+                
+                # Температуры берем с верхнего уровня объекта
+                in_temp = getattr(device, "in_temp", None)
+                out_temp = getattr(device, "out_temp", None)
+                heater_temp = getattr(device, "heater_temp", None)
+                
                 zone = getattr(device, "zone", None)
                 swing = getattr(device, "swing", None)
                 
-                # Надежный поиск температур (в разных версиях tion они могут называться по-разному)
-                in_temp = getattr(device, "in_temp", getattr(device, "temperature", None))
-                out_temp = getattr(device, "out_temp", None)
-                heater_temp = getattr(device, "heater_temp", getattr(device, "target_temperature", None))
-                
-                # Скорости всегда приводим к int
-                speed = int(getattr(device, "speed", 0))
-                min_speed = int(getattr(device, "min_speed", getattr(zone, "min_speed", 1) if zone else 1))
-                max_speed = int(getattr(device, "max_speed", getattr(zone, "max_speed", 6) if zone else 6))
-                
-                # Жалюзи (если off, то считаем horizontal по умолчанию)
                 swing_val = str(getattr(swing, "mode", "horizontal")).lower() if swing else "horizontal"
-                if swing_val == "off":
-                    swing_val = "horizontal"
+                if swing_val in ("vertical", "indoor"):
+                    swing_val = "indoor"
+                elif swing_val in ("horizontal", "outdoor"):
+                    swing_val = "outdoor"
+                elif swing_val == "off":
+                    swing_val = "indoor" # По умолчанию при выключении/сбросе
 
                 data[guid] = {
                     "type": "breezer",
                     "name": getattr(device, "name", "Tion Breezer"),
                     "is_on": getattr(device, "is_on", False),
                     "speed": speed,
-                    
                     "zone_mode": getattr(zone, "mode", "manual") if zone else "manual",
                     "target_co2": getattr(zone, "target_co2", None) if zone else None,
                     "min_speed": min_speed,
                     "max_speed": max_speed,
-                    
-                    "heater_enabled": getattr(device, "heater_enabled", False),
+                    "heater_enabled": getattr(device, "heater", False),
                     "target_temperature": heater_temp,
                     "current_temperature": in_temp,
                     "out_temperature": out_temp,
-                    
                     "swing_mode": swing_val,
                 }
             elif cls_name == "MagicAir":
@@ -126,6 +128,6 @@ class TionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return data
 
     async def async_fast_refresh(self) -> None:
-        import asyncio
-        await asyncio.sleep(2)
+        """Увеличенная пауза для защиты от rate limit облака."""
+        await asyncio.sleep(8)
         await self.async_request_refresh()

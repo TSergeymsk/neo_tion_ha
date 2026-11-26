@@ -42,22 +42,15 @@ async def async_setup_entry(
             
         elif device_type == "breezer":
             entities.extend([
-                # Климат
                 TionSensor(coordinator, guid, name, device_type, "current_temperature", "Temperature In", UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE),
                 TionSensor(coordinator, guid, name, device_type, "out_temperature", "Temperature Out", UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE),
                 TionSensor(coordinator, guid, name, device_type, "target_temperature", "Target Temperature", UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE),
                 TionSensor(coordinator, guid, name, device_type, "heater_enabled", "Heater State"),
-                
-                # Скорости
                 TionSensor(coordinator, guid, name, device_type, "speed", "Fan Speed Current"),
                 TionSensor(coordinator, guid, name, device_type, "min_speed", "Fan Speed Min"),
                 TionSensor(coordinator, guid, name, device_type, "max_speed", "Fan Speed Max"),
-                
-                # Авто-режим и CO2
                 TionSensor(coordinator, guid, name, device_type, "zone_mode", "Mode"),
                 TionSensor(coordinator, guid, name, device_type, "target_co2", "Target CO2", CONCENTRATION_PARTS_PER_MILLION, SensorDeviceClass.CO2),
-                
-                # Жалюзи
                 TionSensor(coordinator, guid, name, device_type, "swing_mode", "Swing Mode"),
             ])
 
@@ -78,7 +71,6 @@ class TionSensor(TionEntity, SensorEntity):
         unit: str | None = None,
         device_class: SensorDeviceClass | None = None,
     ) -> None:
-        """Initialize the sensor."""
         super().__init__(coordinator, guid, device_name, device_type)
         self._data_key = data_key
         self._attr_unique_id = f"{guid}_{data_key}"
@@ -94,18 +86,16 @@ class TionSensor(TionEntity, SensorEntity):
         val = self._device_data.get(self._data_key)
         if isinstance(val, bool):
             return "on" if val else "off"
-        # Принудительно приводим скорости к int
         if self._data_key in ["speed", "min_speed", "max_speed"] and val is not None:
             return int(val)
         return val
 
     @property
     def icon(self) -> str | None:
-        """Динамические иконки для сенсоров."""
         if self._data_key == "speed":
             speed = self.native_value or 0
             if speed == 0:
-                return "mdi:fan-off"
+                return "mdi:power"
             if speed <= 2:
                 return "mdi:fan-speed-1"
             if speed <= 4:

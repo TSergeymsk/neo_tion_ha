@@ -7,4 +7,5 @@ PLATFORMS = ["climate", "sensor"]
 CONF_EMAIL = "email"
 CONF_PASSWORD = "password"
 
-DEFAULT_SCAN_INTERVAL_SECONDS = 60
+# Увеличен интервал во избежание rate-limit от облака Tion
+DEFAULT_SCAN_INTERVAL_SECONDS = 120

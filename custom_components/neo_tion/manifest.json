@@ -1,7 +1,7 @@
 {
   "domain": "neo_tion",
   "name": "Neo Tion",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "codeowners": ["@TSergeymsk"],
   "config_flow": true,
   "dependencies": [],
@@ -9,6 +9,6 @@
   "integration_type": "hub",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/TSergeymsk/neo_tion_ha/issues",
-  "requirements": ["tion>=2.0.0"],
+  "requirements": ["tion>=1.28"],
   "quality_scale": "bronze"
 }

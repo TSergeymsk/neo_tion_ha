@@ -26,11 +26,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def create_tion_api(email: str, password: str) -> TionApi:
-    """Create TionApi instance compatible with multiple library versions.
-
-    Older versions of the `tion` library used `save_auth`, newer versions
-    use `auth_fname`. Some versions accept neither explicitly.
-    """
+    """Create TionApi instance compatible with multiple library versions."""
     try:
         return TionApi(email, password, auth_fname=None)
     except TypeError:
@@ -88,7 +84,6 @@ class TionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         devices = self._api.get_devices()
 
-        # Пересобираем кэш объектов устройств
         self._devices = {}
         for device in devices:
             guid = getattr(device, "guid", None) or getattr(

@@ -21,10 +21,9 @@ _LOGGER = logging.getLogger(__name__)
 
 FAN_MODES = ["1", "2", "3", "4", "5", "6"]
 
-HA_TO_TION_HVAC = {
-    HVACMode.OFF: False,
-    HVACMode.FAN_ONLY: True,
-}
+# В библиотеке tion 1.28 is_on вычисляется из speed:
+# speed == 0 -> выключен, speed > 0 -> включён.
+# Поэтому управляем именно скоростью.
 
 
 async def async_setup_entry(
@@ -70,6 +69,8 @@ class TionBreezerClimate(TionEntity, ClimateEntity):
         """Initialize the climate entity."""
         super().__init__(coordinator, guid, name, "breezer")
         self._attr_unique_id = f"{guid}_climate"
+        # Запоминаем последнюю ненулевую скорость, чтобы вернуть её при включении
+        self._last_speed: int = 1
 
     @property
     def current_temperature(self) -> float | None:
@@ -81,30 +82,45 @@ class TionBreezerClimate(TionEntity, ClimateEntity):
 
     @property
     def hvac_mode(self) -> HVACMode:
-        if self._device_data.get("is_on"):
+        speed = self._device_data.get("speed")
+        if speed is not None and speed > 0:
             return HVACMode.FAN_ONLY
         return HVACMode.OFF
 
     @property
     def fan_mode(self) -> str | None:
         speed = self._device_data.get("speed")
-        return str(speed) if speed is not None else None
+        if speed is None or speed == 0:
+            return None
+        return str(speed)
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
-        await self._send_command("set_hvac_mode", hvac_mode)
+        """Set new HVAC mode."""
+        if hvac_mode == HVACMode.OFF:
+            await self._send_command("set_speed", 0)
+        else:
+            # При включении восстанавливаем последнюю ненулевую скорость
+            await self._send_command("set_speed", self._last_speed)
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
-        await self._send_command("set_fan_mode", fan_mode)
+        """Set new fan mode."""
+        speed = int(fan_mode)
+        if speed > 0:
+            self._last_speed = speed
+        await self._send_command("set_speed", speed)
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
+        """Set new target temperature."""
         if (temp := kwargs.get(ATTR_TEMPERATURE)) is not None:
             await self._send_command("set_temperature", temp)
 
     async def async_turn_on(self) -> None:
-        await self._send_command("set_hvac_mode", HVACMode.FAN_ONLY)
+        """Turn the breezer on."""
+        await self._send_command("set_speed", self._last_speed)
 
     async def async_turn_off(self) -> None:
-        await self._send_command("set_hvac_mode", HVACMode.OFF)
+        """Turn the breezer off."""
+        await self._send_command("set_speed", 0)
 
     async def _send_command(self, command: str, value: Any) -> None:
         """Send a command to the device via the executor."""
@@ -121,9 +137,7 @@ class TionBreezerClimate(TionEntity, ClimateEntity):
                 f"Breezer {self._device_guid} not found in cached devices"
             )
 
-        if command == "set_hvac_mode":
-            device.is_on = HA_TO_TION_HVAC[value]
-        elif command == "set_fan_mode":
+        if command == "set_speed":
             device.speed = int(value)
         elif command == "set_temperature":
             device.heater_temp = int(value)

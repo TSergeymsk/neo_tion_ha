@@ -11,7 +11,6 @@ from homeassistant.components.climate import (
     HVACMode,
 )
 from homeassistant.components.climate.const import (
-    SWING_OFF,
     SWING_HORIZONTAL,
     SWING_VERTICAL,
     SWING_BOTH,
@@ -50,8 +49,9 @@ class TionBreezerClimate(TionEntity, ClimateEntity):
     _attr_min_temp = 10
     _attr_max_temp = 30
     _attr_fan_modes = FAN_MODES
+    # Убрали SWING_OFF
+    _attr_swing_modes = [SWING_HORIZONTAL, SWING_VERTICAL, SWING_BOTH]
     _attr_hvac_modes = [HVACMode.OFF, HVACMode.FAN_ONLY, HVACMode.AUTO]
-    _attr_swing_modes = [SWING_OFF, SWING_HORIZONTAL, SWING_VERTICAL, SWING_BOTH]
     _attr_supported_features = (
         ClimateEntityFeature.TARGET_TEMPERATURE
         | ClimateEntityFeature.FAN_MODE
@@ -86,14 +86,16 @@ class TionBreezerClimate(TionEntity, ClimateEntity):
         speed = self._device_data.get("speed")
         if speed is None or speed == 0:
             return None
-        return str(speed)
+        return str(int(speed))
 
     @property
     def swing_mode(self) -> str:
-        mode = self._device_data.get("swing_mode", "off").lower()
-        if mode in ["off", "horizontal", "vertical", "both"]:
-            return mode
-        return SWING_OFF
+        mode = self._device_data.get("swing_mode", "horizontal").lower()
+        if mode in ["vertical", "indoor"]:
+            return SWING_VERTICAL
+        if mode in ["both"]:
+            return SWING_BOTH
+        return SWING_HORIZONTAL  # default
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         if hvac_mode == HVACMode.OFF:
@@ -114,7 +116,14 @@ class TionBreezerClimate(TionEntity, ClimateEntity):
         await self._send_command("set_zone_mode", "manual")
 
     async def async_set_swing_mode(self, swing_mode: str) -> None:
-        await self._send_command("set_swing", swing_mode)
+        # Мапим стандартные значения HA в строки для API tion
+        if swing_mode == SWING_HORIZONTAL:
+            target = "horizontal"
+        elif swing_mode == SWING_VERTICAL:
+            target = "vertical"
+        else:
+            target = "both"
+        await self._send_command("set_swing", target)
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         if (temp := kwargs.get(ATTR_TEMPERATURE)) is not None:

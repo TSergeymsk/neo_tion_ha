@@ -94,4 +94,36 @@ class TionSensor(TionEntity, SensorEntity):
         val = self._device_data.get(self._data_key)
         if isinstance(val, bool):
             return "on" if val else "off"
+        # Принудительно приводим скорости к int
+        if self._data_key in ["speed", "min_speed", "max_speed"] and val is not None:
+            return int(val)
         return val
+
+    @property
+    def icon(self) -> str | None:
+        """Динамические иконки для сенсоров."""
+        if self._data_key == "speed":
+            speed = self.native_value or 0
+            if speed == 0:
+                return "mdi:fan-off"
+            if speed <= 2:
+                return "mdi:fan-speed-1"
+            if speed <= 4:
+                return "mdi:fan-speed-2"
+            return "mdi:fan-speed-3"
+
+        icons = {
+            "current_temperature": "mdi:home-thermometer",
+            "out_temperature": "mdi:thermometer-lines",
+            "target_temperature": "mdi:thermometer-check",
+            "temperature": "mdi:thermometer",
+            "co2": "mdi:molecule-co2",
+            "target_co2": "mdi:molecule-co2",
+            "humidity": "mdi:water-percent",
+            "heater_enabled": "mdi:radiator",
+            "zone_mode": "mdi:auto-fix",
+            "swing_mode": "mdi:air-conditioner",
+            "min_speed": "mdi:speedometer-slow",
+            "max_speed": "mdi:speedometer",
+        }
+        return icons.get(self._data_key, "mdi:eye")

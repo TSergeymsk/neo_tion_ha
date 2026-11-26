@@ -82,23 +82,38 @@ class TionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 zone = getattr(device, "zone", None)
                 swing = getattr(device, "swing", None)
                 
+                # Надежный поиск температур (в разных версиях tion они могут называться по-разному)
+                in_temp = getattr(device, "in_temp", getattr(device, "temperature", None))
+                out_temp = getattr(device, "out_temp", None)
+                heater_temp = getattr(device, "heater_temp", getattr(device, "target_temperature", None))
+                
+                # Скорости всегда приводим к int
+                speed = int(getattr(device, "speed", 0))
+                min_speed = int(getattr(device, "min_speed", getattr(zone, "min_speed", 1) if zone else 1))
+                max_speed = int(getattr(device, "max_speed", getattr(zone, "max_speed", 6) if zone else 6))
+                
+                # Жалюзи (если off, то считаем horizontal по умолчанию)
+                swing_val = str(getattr(swing, "mode", "horizontal")).lower() if swing else "horizontal"
+                if swing_val == "off":
+                    swing_val = "horizontal"
+
                 data[guid] = {
                     "type": "breezer",
                     "name": getattr(device, "name", "Tion Breezer"),
                     "is_on": getattr(device, "is_on", False),
-                    "speed": getattr(device, "speed", 0),
+                    "speed": speed,
                     
                     "zone_mode": getattr(zone, "mode", "manual") if zone else "manual",
                     "target_co2": getattr(zone, "target_co2", None) if zone else None,
-                    "min_speed": getattr(zone, "min_speed", 1) if zone else 1,
-                    "max_speed": getattr(zone, "max_speed", 6) if zone else 6,
+                    "min_speed": min_speed,
+                    "max_speed": max_speed,
                     
                     "heater_enabled": getattr(device, "heater_enabled", False),
-                    "target_temperature": getattr(device, "heater_temp", None),
-                    "current_temperature": getattr(device, "in_temp", None),
-                    "out_temperature": getattr(device, "out_temp", None),
+                    "target_temperature": heater_temp,
+                    "current_temperature": in_temp,
+                    "out_temperature": out_temp,
                     
-                    "swing_mode": str(getattr(swing, "mode", "off")).lower() if swing else "off",
+                    "swing_mode": swing_val,
                 }
             elif cls_name == "MagicAir":
                 data[guid] = {

@@ -24,7 +24,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 )
 
 
-class Neo TionConfigFlow(ConfigFlow, domain=DOMAIN):
+class NeoTionConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Neo Tion."""
 
     VERSION = 1

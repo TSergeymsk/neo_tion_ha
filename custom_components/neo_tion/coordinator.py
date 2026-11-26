@@ -33,6 +33,8 @@ class TionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._email = entry.data[CONF_EMAIL]
         self._password = entry.data[CONF_PASSWORD]
         self._api: TionApi | None = None
+        # Кэш объектов устройств: guid -> device
+        self._devices: dict[str, Any] = {}
 
         super().__init__(
             hass,
@@ -41,6 +43,18 @@ class TionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             update_interval=timedelta(seconds=DEFAULT_SCAN_INTERVAL_SECONDS),
             config_entry=entry,
         )
+
+    @property
+    def api(self) -> TionApi:
+        """Return the initialized Tion API client."""
+        if self._api is None:
+            raise RuntimeError("Tion API not initialized yet")
+        return self._api
+
+    @property
+    def devices(self) -> dict[str, Any]:
+        """Return cached device objects keyed by guid."""
+        return self._devices
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from the Tion API in the executor (library is sync)."""
@@ -55,14 +69,19 @@ class TionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._api = TionApi(self._email, self._password, save_auth=False)
 
         devices = self._api.get_devices()
-        data: dict[str, Any] = {}
 
+        # Пересобираем кэш объектов устройств
+        self._devices = {}
         for device in devices:
-            # Определяем тип устройства по имени класса (Breezer или MagicAir)
+            guid = getattr(device, "guid", None) or getattr(
+                device, "device_guid", None
+            )
+            if guid:
+                self._devices[guid] = device
+
+        data: dict[str, Any] = {}
+        for guid, device in self._devices.items():
             cls_name = device.__class__.__name__
-            guid = getattr(device, "guid", None) or getattr(device, "device_guid", None)
-            if not guid:
-                continue
 
             if cls_name == "Breezer":
                 data[guid] = {
@@ -70,7 +89,11 @@ class TionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "name": getattr(device, "name", "Tion Breezer"),
                     "is_on": device.is_on,
                     "speed": device.speed,
-                    "mode": getattr(device.zone, "mode", "manual") if device.zone else "manual",
+                    "mode": (
+                        getattr(device.zone, "mode", "manual")
+                        if device.zone
+                        else "manual"
+                    ),
                     "current_temperature": getattr(device, "in_temp", None),
                     "target_temperature": getattr(device, "heater_temp", None),
                 }

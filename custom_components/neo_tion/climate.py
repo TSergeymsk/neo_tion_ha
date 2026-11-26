@@ -10,6 +10,12 @@ from homeassistant.components.climate import (
     ClimateEntityFeature,
     HVACMode,
 )
+from homeassistant.components.climate.const import (
+    SWING_OFF,
+    SWING_HORIZONTAL,
+    SWING_VERTICAL,
+    SWING_BOTH,
+)
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -20,7 +26,6 @@ from .entity import TionEntity
 _LOGGER = logging.getLogger(__name__)
 
 FAN_MODES = ["1", "2", "3", "4", "5", "6"]
-PRESET_MODES = ["manual", "auto"]
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -45,12 +50,12 @@ class TionBreezerClimate(TionEntity, ClimateEntity):
     _attr_min_temp = 10
     _attr_max_temp = 30
     _attr_fan_modes = FAN_MODES
-    _attr_preset_modes = PRESET_MODES
     _attr_hvac_modes = [HVACMode.OFF, HVACMode.FAN_ONLY, HVACMode.AUTO]
+    _attr_swing_modes = [SWING_OFF, SWING_HORIZONTAL, SWING_VERTICAL, SWING_BOTH]
     _attr_supported_features = (
         ClimateEntityFeature.TARGET_TEMPERATURE
         | ClimateEntityFeature.FAN_MODE
-        | ClimateEntityFeature.PRESET_MODE
+        | ClimateEntityFeature.SWING_MODE
         | ClimateEntityFeature.TURN_ON
         | ClimateEntityFeature.TURN_OFF
     )
@@ -77,36 +82,39 @@ class TionBreezerClimate(TionEntity, ClimateEntity):
         return HVACMode.FAN_ONLY
 
     @property
-    def preset_mode(self) -> str | None:
-        if not self._device_data.get("is_on"):
-            return None
-        mode = self._device_data.get("zone_mode", "manual")
-        return "auto" if mode == "auto" else "manual"
-
-    @property
     def fan_mode(self) -> str | None:
         speed = self._device_data.get("speed")
         if speed is None or speed == 0:
             return None
         return str(speed)
 
+    @property
+    def swing_mode(self) -> str:
+        mode = self._device_data.get("swing_mode", "off").lower()
+        if mode in ["off", "horizontal", "vertical", "both"]:
+            return mode
+        return SWING_OFF
+
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         if hvac_mode == HVACMode.OFF:
             await self._send_command("set_speed", 0)
+            await self._send_command("set_swing", "horizontal")
         elif hvac_mode == HVACMode.AUTO:
             await self._send_command("set_zone_mode", "auto")
+            await self._send_command("set_swing", "horizontal")
         else:
             await self._send_command("set_zone_mode", "manual")
             await self._send_command("set_speed", self._last_speed)
-
-    async def async_set_preset_mode(self, preset_mode: str) -> None:
-        await self._send_command("set_zone_mode", preset_mode)
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
         speed = int(fan_mode)
         if speed > 0:
             self._last_speed = speed
         await self._send_command("set_speed", speed)
+        await self._send_command("set_zone_mode", "manual")
+
+    async def async_set_swing_mode(self, swing_mode: str) -> None:
+        await self._send_command("set_swing", swing_mode)
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         if (temp := kwargs.get(ATTR_TEMPERATURE)) is not None:
@@ -117,11 +125,10 @@ class TionBreezerClimate(TionEntity, ClimateEntity):
 
     async def async_turn_off(self) -> None:
         await self._send_command("set_speed", 0)
+        await self._send_command("set_swing", "horizontal")
 
     async def _send_command(self, command: str, value: Any) -> None:
-        """Отправка команды и запуск быстрого обновления."""
         await self.hass.async_add_executor_job(self._send_command_sync, command, value)
-        # Запускаем фоновое обновление через 2 секунды
         self.hass.async_create_task(self.coordinator.async_fast_refresh())
 
     def _send_command_sync(self, command: str, value: Any) -> None:
@@ -136,7 +143,8 @@ class TionBreezerClimate(TionEntity, ClimateEntity):
         elif command == "set_zone_mode":
             if getattr(device, "zone", None):
                 device.zone.mode = value
-        else:
-            raise ValueError(f"Unknown command: {command}")
+        elif command == "set_swing":
+            if hasattr(device, "swing"):
+                device.swing.mode = value
 
         device.send()

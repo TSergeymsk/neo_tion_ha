@@ -1,61 +1,55 @@
-set_auto_mode:
-  name: Set Auto Mode (CO2)
-  description: Configure the auto ventilation mode based on CO2 levels.
+set_breezer:
+  name: Set Breezer
+  description: Configure Tion breezer parameters.
   target:
     entity:
       domain: climate
       integration: neo_tion
   fields:
-    target_co2:
+    mode:
+      name: Mode
+      description: "off - выключен, fan - заданная скорость, auto - автоматическая"
+      selector:
+        select:
+          options:
+            - "off"
+            - "fan"
+            - "auto"
+    targetco2:
       name: Target CO2
-      description: Desired CO2 level in ppm.
-      required: true
-      example: 800
+      description: Desired CO2 level in ppm (for auto mode).
       selector:
         number:
           min: 400
           max: 2000
-          unit_of_measurement: ppm
-    min_speed:
-      name: Minimum Speed
-      description: Minimum fan speed (0-6).
-      required: false
-      default: 1
+          unit_of_measurement: "ppm"
+    speed:
+      name: Speed
+      description: "1-6. If mode is auto, this sets the max speed (min is 0)."
       selector:
         number:
-          min: 0
+          min: 1
           max: 6
-    max_speed:
-      name: Maximum Speed
-      description: Maximum fan speed (0-6).
-      required: false
-      default: 6
-      selector:
-        number:
-          min: 0
-          max: 6
-
-set_heater:
-  name: Set Heater
-  description: Configure the heater settings for the breezer.
-  target:
-    entity:
-      domain: climate
-      integration: neo_tion
-  fields:
-    heater_enabled:
-      name: Heater Enabled
-      description: Turn the heater on or off.
-      required: true
-      selector:
-        boolean:
-    target_temperature:
+    targettemp:
       name: Target Temperature
       description: Desired heating temperature.
-      required: false
-      example: 22
       selector:
         number:
           min: 10
           max: 30
-          unit_of_measurement: °C
+          unit_of_measurement: "°C"
+    heat:
+      name: Heater
+      description: Turn heater on/off.
+      selector:
+        boolean:
+    swing:
+      name: Swing
+      description: Louver position.
+      selector:
+        select:
+          options:
+            - "off"
+            - "horizontal"
+            - "vertical"
+            - "both"

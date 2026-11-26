@@ -26,7 +26,6 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def create_tion_api(email: str, password: str) -> TionApi:
-    """Create TionApi instance compatible with multiple library versions."""
     try:
         return TionApi(email, password, auth_fname=None)
     except TypeError:
@@ -80,26 +79,26 @@ class TionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             cls_name = device.__class__.__name__
 
             if cls_name == "Breezer":
-                # Извлекаем данные зоны (если бризер связан с MagicAir)
                 zone = getattr(device, "zone", None)
-                zone_mode = getattr(zone, "mode", "manual") if zone else "manual"
-                target_co2 = getattr(zone, "target_co2", None) if zone else None
-                min_speed = getattr(zone, "min_speed", 1) if zone else 1
-                max_speed = getattr(zone, "max_speed", 6) if zone else 6
-
+                swing = getattr(device, "swing", None)
+                
                 data[guid] = {
                     "type": "breezer",
                     "name": getattr(device, "name", "Tion Breezer"),
                     "is_on": getattr(device, "is_on", False),
                     "speed": getattr(device, "speed", 0),
-                    "zone_mode": zone_mode,
-                    "target_co2": target_co2,
-                    "min_speed": min_speed,
-                    "max_speed": max_speed,
-                    "current_temperature": getattr(device, "in_temp", None),
-                    "target_temperature": getattr(device, "heater_temp", None),
-                    "out_temperature": getattr(device, "out_temp", None),
+                    
+                    "zone_mode": getattr(zone, "mode", "manual") if zone else "manual",
+                    "target_co2": getattr(zone, "target_co2", None) if zone else None,
+                    "min_speed": getattr(zone, "min_speed", 1) if zone else 1,
+                    "max_speed": getattr(zone, "max_speed", 6) if zone else 6,
+                    
                     "heater_enabled": getattr(device, "heater_enabled", False),
+                    "target_temperature": getattr(device, "heater_temp", None),
+                    "current_temperature": getattr(device, "in_temp", None),
+                    "out_temperature": getattr(device, "out_temp", None),
+                    
+                    "swing_mode": str(getattr(swing, "mode", "off")).lower() if swing else "off",
                 }
             elif cls_name == "MagicAir":
                 data[guid] = {
@@ -112,7 +111,6 @@ class TionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return data
 
     async def async_fast_refresh(self) -> None:
-        """Обновление через короткий промежуток времени для обратной связи."""
         import asyncio
-        await asyncio.sleep(2)  # Ждем, пока облако Tion обработает команду
+        await asyncio.sleep(2)
         await self.async_request_refresh()

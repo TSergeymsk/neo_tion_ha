@@ -11,11 +11,22 @@
       }
     },
     "error": {
-      "invalid_auth": "Invalid email or password.",
+      "invalid_auth": "Invalid email or password, or the Tion cloud rejected the request.",
+      "no_devices": "Authentication succeeded, but no devices are linked to the account.",
       "unknown": "Unexpected error. Check the logs."
     },
     "abort": {
       "already_configured": "This account is already configured."
+    }
+  },
+  "services": {
+    "set_auto_mode": {
+      "name": "Set Auto Mode (CO2)",
+      "description": "Configure the auto ventilation mode based on CO2 levels."
+    },
+    "set_heater": {
+      "name": "Set Heater",
+      "description": "Configure the heater settings for the breezer."
     }
   }
 }

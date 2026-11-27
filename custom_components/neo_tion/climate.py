@@ -133,8 +133,10 @@ class TionBreezerClimate(TionEntity, ClimateEntity):
         await self._send_swing_command(SWING_OUTDOOR)
 
     async def _send_mode_command(self, mode: str) -> None:
-        await self.hass.async_add_executor_job(self._send_sync, "mode", mode)
-        await asyncio.sleep(1)
+        device = self.coordinator.devices.get(self._device_guid)
+        if device and getattr(device, "zone", None):
+            await self.hass.async_add_executor_job(self._send_sync, "mode", mode)
+            await asyncio.sleep(1)
 
     async def _send_speed_command(self, speed: int) -> None:
         await self.hass.async_add_executor_job(self._send_sync, "speed", speed)
@@ -159,17 +161,19 @@ class TionBreezerClimate(TionEntity, ClimateEntity):
             return
 
         if command == "mode":
+            device.zone.mode = value
             if getattr(device, "zone", None):
-                device.zone.mode = value
+                device.zone.send()  # Явная отправка режима зоны
         elif command == "speed":
             device.speed = int(value)
+            device.send()
         elif command == "swing":
             if hasattr(device, "swing"):
                 device.swing.mode = value
+                device.send()
         elif command == "temperature":
             device.t_set = int(value)
             device.heater_enabled = True
             if getattr(device, "speed", 0) == 0:
                 device.speed = 1
-
-        device.send()
+            device.send()

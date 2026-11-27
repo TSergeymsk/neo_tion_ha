@@ -68,7 +68,6 @@ class TionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._api = create_tion_api(self._email, self._password)
 
         if force:
-            # Сбрасываем кэш библиотеки tion, чтобы получить свежие данные с сервера
             if hasattr(self._api, "_last_update"):
                 self._api._last_update = 0
 
@@ -79,6 +78,11 @@ class TionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             guid = getattr(device, "guid", None) or getattr(device, "device_guid", None)
             if guid:
                 self._devices[guid] = device
+                
+                # Возвращен отладочный вывод
+                if device.__class__.__name__ == "Breezer":
+                    _LOGGER.debug("=== DEBUG BREEZER [%s] ===", getattr(device, "name", "Unknown"))
+                    _LOGGER.debug("vars(device): %s", vars(device))
 
         data: dict[str, Any] = {}
         for guid, device in self._devices.items():
@@ -131,7 +135,6 @@ class TionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return data
 
     async def async_fast_refresh(self) -> None:
-        """Принудительное обновление с обходом кэша."""
         await asyncio.sleep(5)
         try:
             data = await self.hass.async_add_executor_job(self._fetch_data_sync, True)

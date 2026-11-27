@@ -87,38 +87,56 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
             _LOGGER.debug("Applying changes to %s", getattr(device, "name", guid))
 
-            # --- ШАГ 1: Режим, скорость, жалюзи ---
-            mode_changed = False
-            if mode:
-                if mode == "off":
-                    device.speed = 0
-                    if hasattr(device, "swing"):
-                        device.swing.mode = "horizontal"
-                elif mode == "fan":
-                    device.zone.mode = "manual"
-                    if speed is not None:
-                        device.speed = int(speed)
-                    elif getattr(device, "speed", 0) == 0:
-                        device.speed = 1 
-                elif mode == "auto":
-                    device.zone.mode = "auto"
-                    if speed is not None:
-                        device.speed_min_set = 0
-                        device.speed_max_set = int(speed)
-                    if hasattr(device, "swing"):
-                        device.swing.mode = "horizontal" 
-                mode_changed = True
+            # --- ШАГ 1: Режим (если нужно) ---
+            zone_changed = False
+            if mode == "auto":
+                device.zone.mode = "auto"
+                zone_changed = True
+            elif mode in ("fan", "off"):
+                device.zone.mode = "manual"
+                zone_changed = True
+            elif speed is not None and not mode:
+                # Если меняем скорость без указания режима, принудительно ставим manual
+                device.zone.mode = "manual"
+                zone_changed = True
 
             if target_co2 is not None:
                 if getattr(device, "zone", None):
                     device.zone.target_co2 = int(target_co2)
-                mode_changed = True
+                    zone_changed = True
 
-            if speed is not None and not mode:
-                device.zone.mode = "manual"
+            if zone_changed and getattr(device, "zone", None):
+                _LOGGER.debug("Sending zone mode command to %s", getattr(device, "name", guid))
+                try:
+                    await hass.async_add_executor_job(device.zone.send)
+                    await asyncio.sleep(2)
+                except Exception as err:
+                    _LOGGER.error("Failed to send zone command: %s", err)
+
+            # --- ШАГ 2: Скорость ---
+            speed_changed = False
+            if mode == "off":
+                device.speed = 0
+                speed_changed = True
+            elif mode == "fan" and speed is None and getattr(device, "speed", 0) == 0:
+                device.speed = 1
+                speed_changed = True
+            elif speed is not None:
                 device.speed = int(speed)
-                mode_changed = True
+                speed_changed = True
+                if mode == "auto":
+                    device.speed_min_set = 0
+                    device.speed_max_set = int(speed)
 
+            if speed_changed:
+                _LOGGER.debug("Sending speed command (%s) to %s", device.speed, getattr(device, "name", guid))
+                try:
+                    await hass.async_add_executor_job(device.send)
+                    await asyncio.sleep(2)
+                except Exception as err:
+                    _LOGGER.error("Failed to send speed command: %s", err)
+
+            # --- ШАГ 3: Жалюзи ---
             if swing is not None:
                 target_swing = str(swing).lower()
                 if target_swing == "indoor":
@@ -127,18 +145,11 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
                     target_swing = "horizontal"
                 if hasattr(device, "swing"):
                     device.swing.mode = target_swing
-                mode_changed = True
-
-            if mode_changed:
-                _LOGGER.debug("Sending mode/speed command to %s", getattr(device, "name", guid))
-                try:
+                    _LOGGER.debug("Sending swing command to %s", getattr(device, "name", guid))
                     await hass.async_add_executor_job(device.send)
-                    _LOGGER.debug("Mode/speed command sent successfully")
-                    await asyncio.sleep(2)  # Даем облаку Tion время применить изменения режима
-                except Exception as err:
-                    _LOGGER.error("Failed to send mode/speed command to %s: %s", guid, err)
+                    await asyncio.sleep(2)
 
-            # --- ШАГ 2: Обогрев и температура ---
+            # --- ШАГ 4: Обогрев и температура ---
             heater_changed = False
             if target_temp is not None:
                 device.t_set = int(target_temp)
@@ -157,9 +168,8 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
                 _LOGGER.debug("Sending heater/temp command to %s", getattr(device, "name", guid))
                 try:
                     await hass.async_add_executor_job(device.send)
-                    _LOGGER.debug("Heater/temp command sent successfully")
                 except Exception as err:
-                    _LOGGER.error("Failed to send heater/temp command to %s: %s", guid, err)
+                    _LOGGER.error("Failed to send heater/temp command: %s", err)
 
             hass.async_create_task(coordinator.async_fast_refresh())
 

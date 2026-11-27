@@ -61,7 +61,7 @@ class TionBreezerClimate(TionEntity, ClimateEntity):
     def __init__(self, coordinator: TionDataUpdateCoordinator, guid: str, name: str) -> None:
         super().__init__(coordinator, guid, name, "breezer")
         self._attr_unique_id = f"{guid}_climate"
-        self._attr_name = None # Чтобы не было climate.bedroom_bedroom
+        self._attr_name = None # Убрано дублирование имени (bedroom_bedroom)
         self._last_speed: int = 1
 
     @property
@@ -146,11 +146,13 @@ class TionBreezerClimate(TionEntity, ClimateEntity):
             raise ValueError(f"Breezer {self._device_guid} not found")
 
         if command == "set_speed":
-            device.is_on = int(value) > 0
+            # Убрано device.is_on = ... (вызывало ошибку)
             device.speed = int(value)
         elif command == "set_temperature":
             device.t_set = int(value)
             device.heater_enabled = True
+            if getattr(device, "speed", 0) == 0:
+                device.speed = 1 # Включаем вентилятор при нагреве
         elif command == "set_zone_mode":
             if getattr(device, "zone", None):
                 device.zone.mode = value

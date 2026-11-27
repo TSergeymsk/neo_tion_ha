@@ -88,19 +88,19 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
             if mode:
                 if mode == "off":
-                    device.is_on = False
+                    device.speed = 0
                     if hasattr(device, "swing"):
                         device.swing.mode = "horizontal"
                 elif mode == "fan":
-                    device.is_on = True
                     device.zone.mode = "manual"
                     if speed is not None:
                         device.speed = int(speed)
                     elif getattr(device, "speed", 0) == 0:
                         device.speed = 1 
                 elif mode == "auto":
-                    device.is_on = True
                     device.zone.mode = "auto"
+                    if getattr(device, "speed", 0) == 0:
+                        device.speed = 1 # Бризер должен работать, чтобы перейти в авто
                     if speed is not None:
                         device.speed_min_set = 0
                         device.speed_max_set = int(speed)
@@ -111,19 +111,20 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
                 if getattr(device, "zone", None):
                     device.zone.target_co2 = int(target_co2)
 
-            # Если скорость задана БЕЗ mode, принудительно ставим manual и включаем
             if speed is not None and not mode:
-                device.is_on = True
                 device.zone.mode = "manual"
                 device.speed = int(speed)
 
             if target_temp is not None:
                 device.t_set = int(target_temp)
-                # При задании температуры обязательно включаем обогрев
                 device.heater_enabled = True
+                if getattr(device, "speed", 0) == 0:
+                    device.speed = 1 # Для обогрева нужен поток воздуха
 
             if heat is not None:
                 device.heater_enabled = heat
+                if heat and getattr(device, "speed", 0) == 0:
+                    device.speed = 1
 
             if swing is not None:
                 target_swing = str(swing).lower()

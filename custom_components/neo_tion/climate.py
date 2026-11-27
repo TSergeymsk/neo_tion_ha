@@ -9,6 +9,7 @@ from homeassistant.components.climate import (
     ClimateEntity,
     ClimateEntityFeature,
     HVACMode,
+    HVACAction,
 )
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
@@ -79,6 +80,15 @@ class TionBreezerClimate(TionEntity, ClimateEntity):
         return HVACMode.FAN_ONLY
 
     @property
+    def hvac_action(self) -> HVACAction | None:
+        """Текущее действие: обогрев или просто вентиляция."""
+        if not self._device_data.get("is_on"):
+            return HVACAction.OFF
+        if self._device_data.get("heater_enabled"):
+            return HVACAction.HEATING
+        return HVACAction.FAN
+
+    @property
     def fan_mode(self) -> str | None:
         speed = self._device_data.get("speed")
         if speed is None or speed == 0:
@@ -139,7 +149,7 @@ class TionBreezerClimate(TionEntity, ClimateEntity):
             device.speed = int(value)
         elif command == "set_temperature":
             device.heater_temp = int(value)
-            device.heater = True # Включаем обогрев при изменении целевой температуры
+            device.heater = True  # Включаем обогрев при изменении целевой температуры
         elif command == "set_zone_mode":
             if getattr(device, "zone", None):
                 device.zone.mode = value

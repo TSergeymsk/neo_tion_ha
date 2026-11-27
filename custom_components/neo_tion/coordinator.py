@@ -36,24 +36,6 @@ def create_tion_api(email: str, password: str) -> TionApi:
             return TionApi(email, password)
 
 
-def _extract_temp(device: Any, *keys: str) -> float | int | None:
-    """Извлекает температуру из верхнего уровня или вложенных state/data."""
-    # 1. Поиск на верхнем уровне объекта
-    for key in keys:
-        val = getattr(device, key, None)
-        if val is not None:
-            return val
-    # 2. Поиск во вложенных словарях state / data
-    for container_name in ("state", "data"):
-        container = getattr(device, container_name, None)
-        if isinstance(container, dict):
-            for key in keys:
-                val = container.get(key)
-                if val is not None:
-                    return val
-    return None
-
-
 class TionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Coordinator to fetch data from the Tion cloud API."""
 
@@ -98,20 +80,24 @@ class TionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             cls_name = device.__class__.__name__
 
             if cls_name == "Breezer":
+                # Прямое чтение правильных атрибутов согласно документации tion
+                in_temp = getattr(device, "in_temp", None)
+                out_temp = getattr(device, "out_temp", None)
+                heater_temp = getattr(device, "heater_temp", None)
+                
+                # Статус обогрева: используем 'heater' (включен ли обогрев) или 'heating' (греет ли прямо сейчас)
+                heater_enabled = getattr(device, "heater", False)
+                # Если 'heater' отсутствует, пробуем 'heating'
+                if heater_enabled is False:
+                    heater_enabled = getattr(device, "heating", False)
+
+                speed = int(getattr(device, "speed", 0))
+                min_speed = int(getattr(device, "speed_min_set", 0))
+                max_speed = int(getattr(device, "speed_max_set", getattr(device, "speed_limit", 6)))
+                
                 zone = getattr(device, "zone", None)
                 swing = getattr(device, "swing", None)
                 
-                # Извлекаем температуры каскадно
-                in_temp = _extract_temp(device, "in_temp", "temperature", "temp_in")
-                out_temp = _extract_temp(device, "out_temp", "temp_out")
-                heater_temp = _extract_temp(device, "heater_temp", "target_temperature")
-                
-                # Скорости
-                speed = int(getattr(device, "speed", 0))
-                min_speed = int(getattr(device, "speed_min_set", getattr(zone, "min_speed", 0) if zone else 0))
-                max_speed = int(getattr(device, "speed_max_set", getattr(device, "speed_limit", 6)))
-                
-                # Жалюзи
                 swing_val = str(getattr(swing, "mode", "horizontal")).lower() if swing else "horizontal"
                 if swing_val in ("vertical", "indoor"):
                     swing_val = "indoor"
@@ -129,7 +115,7 @@ class TionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "target_co2": getattr(zone, "target_co2", None) if zone else None,
                     "min_speed": min_speed,
                     "max_speed": max_speed,
-                    "heater_enabled": getattr(device, "heater", False),
+                    "heater_enabled": heater_enabled,
                     "target_temperature": heater_temp,
                     "current_temperature": in_temp,
                     "out_temperature": out_temp,

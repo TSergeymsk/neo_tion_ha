@@ -92,7 +92,6 @@ class TionSensor(TionEntity, SensorEntity):
 
     @property
     def icon(self) -> str | None:
-        """Динамические иконки с цифровыми индикаторами скорости (0–6)."""
         if self._data_key == "speed":
             speed = int(self.native_value or 0)
             if 0 <= speed <= 6:

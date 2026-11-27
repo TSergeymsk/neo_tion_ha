@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import asyncio
 from typing import Any
 
 from homeassistant.components.climate import (
@@ -61,7 +62,7 @@ class TionBreezerClimate(TionEntity, ClimateEntity):
     def __init__(self, coordinator: TionDataUpdateCoordinator, guid: str, name: str) -> None:
         super().__init__(coordinator, guid, name, "breezer")
         self._attr_unique_id = f"{guid}_climate"
-        self._attr_name = None # Убрано дублирование имени (bedroom_bedroom)
+        self._attr_name = None
         self._last_speed: int = 1
 
     @property
@@ -101,63 +102,74 @@ class TionBreezerClimate(TionEntity, ClimateEntity):
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         if hvac_mode == HVACMode.OFF:
-            await self._send_command("set_speed", 0)
-            await self._send_command("set_swing", SWING_OUTDOOR)
+            await self._send_speed_command(0)
+            await self._send_swing_command(SWING_OUTDOOR)
         elif hvac_mode == HVACMode.AUTO:
-            await self._send_command("set_zone_mode", "auto")
-            await self._send_command("set_swing", SWING_OUTDOOR)
+            await self._send_mode_command("auto")
+            await self._send_swing_command(SWING_OUTDOOR)
         else:
-            await self._send_command("set_zone_mode", "manual")
-            await self._send_command("set_speed", self._last_speed)
+            await self._send_mode_command("manual")
+            await self._send_speed_command(self._last_speed)
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
         speed = int(fan_mode)
         if speed > 0:
             self._last_speed = speed
-        await self._send_command("set_speed", speed)
-        await self._send_command("set_zone_mode", "manual")
+        await self._send_mode_command("manual")
+        await self._send_speed_command(speed)
 
     async def async_set_swing_mode(self, swing_mode: str) -> None:
-        target = swing_mode
-        if swing_mode == "indoor":
-            target = "vertical"
-        elif swing_mode == "outdoor":
-            target = "horizontal"
-        await self._send_command("set_swing", target)
+        await self._send_swing_command(swing_mode)
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         if (temp := kwargs.get(ATTR_TEMPERATURE)) is not None:
-            await self._send_command("set_temperature", temp)
+            await self._send_temperature_command(temp)
 
     async def async_turn_on(self) -> None:
-        await self._send_command("set_speed", self._last_speed)
+        await self._send_speed_command(self._last_speed)
 
     async def async_turn_off(self) -> None:
-        await self._send_command("set_speed", 0)
-        await self._send_command("set_swing", SWING_OUTDOOR)
+        await self._send_speed_command(0)
+        await self._send_swing_command(SWING_OUTDOOR)
 
-    async def _send_command(self, command: str, value: Any) -> None:
-        await self.hass.async_add_executor_job(self._send_command_sync, command, value)
+    async def _send_mode_command(self, mode: str) -> None:
+        await self.hass.async_add_executor_job(self._send_sync, "mode", mode)
+        await asyncio.sleep(1)
+
+    async def _send_speed_command(self, speed: int) -> None:
+        await self.hass.async_add_executor_job(self._send_sync, "speed", speed)
+        await asyncio.sleep(1)
+
+    async def _send_swing_command(self, swing: str) -> None:
+        target = swing
+        if swing == "indoor":
+            target = "vertical"
+        elif swing == "outdoor":
+            target = "horizontal"
+        await self.hass.async_add_executor_job(self._send_sync, "swing", target)
+        await asyncio.sleep(1)
+
+    async def _send_temperature_command(self, temp: float) -> None:
+        await self.hass.async_add_executor_job(self._send_sync, "temperature", temp)
         self.hass.async_create_task(self.coordinator.async_fast_refresh())
 
-    def _send_command_sync(self, command: str, value: Any) -> None:
+    def _send_sync(self, command: str, value: Any) -> None:
         device = self.coordinator.devices.get(self._device_guid)
         if device is None:
-            raise ValueError(f"Breezer {self._device_guid} not found")
+            return
 
-        if command == "set_speed":
-            # Убрано device.is_on = ... (вызывало ошибку)
+        if command == "mode":
+            if getattr(device, "zone", None):
+                device.zone.mode = value
+        elif command == "speed":
             device.speed = int(value)
-        elif command == "set_temperature":
+        elif command == "swing":
+            if hasattr(device, "swing"):
+                device.swing.mode = value
+        elif command == "temperature":
             device.t_set = int(value)
             device.heater_enabled = True
             if getattr(device, "speed", 0) == 0:
-                device.speed = 1 # Включаем вентилятор при нагреве
-        elif command == "set_zone_mode":
-            if getattr(device, "zone", None):
-                device.zone.mode = value
-        elif command == "set_swing":
-            if hasattr(device, "swing"):
-                device.swing.mode = value
+                device.speed = 1
 
         device.send()

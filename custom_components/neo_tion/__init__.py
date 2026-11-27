@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import asyncio
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
@@ -86,6 +87,8 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
             _LOGGER.debug("Applying changes to %s", getattr(device, "name", guid))
 
+            # --- ШАГ 1: Режим, скорость, жалюзи ---
+            mode_changed = False
             if mode:
                 if mode == "off":
                     device.speed = 0
@@ -99,32 +102,22 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
                         device.speed = 1 
                 elif mode == "auto":
                     device.zone.mode = "auto"
-                    if getattr(device, "speed", 0) == 0:
-                        device.speed = 1 # Бризер должен работать, чтобы перейти в авто
                     if speed is not None:
                         device.speed_min_set = 0
                         device.speed_max_set = int(speed)
                     if hasattr(device, "swing"):
                         device.swing.mode = "horizontal" 
+                mode_changed = True
 
             if target_co2 is not None:
                 if getattr(device, "zone", None):
                     device.zone.target_co2 = int(target_co2)
+                mode_changed = True
 
             if speed is not None and not mode:
                 device.zone.mode = "manual"
                 device.speed = int(speed)
-
-            if target_temp is not None:
-                device.t_set = int(target_temp)
-                device.heater_enabled = True
-                if getattr(device, "speed", 0) == 0:
-                    device.speed = 1 # Для обогрева нужен поток воздуха
-
-            if heat is not None:
-                device.heater_enabled = heat
-                if heat and getattr(device, "speed", 0) == 0:
-                    device.speed = 1
+                mode_changed = True
 
             if swing is not None:
                 target_swing = str(swing).lower()
@@ -134,14 +127,41 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
                     target_swing = "horizontal"
                 if hasattr(device, "swing"):
                     device.swing.mode = target_swing
+                mode_changed = True
 
-            _LOGGER.debug("Sending command to %s", getattr(device, "name", guid))
-            try:
-                await hass.async_add_executor_job(device.send)
-                _LOGGER.debug("Command sent successfully")
-                hass.async_create_task(coordinator.async_fast_refresh())
-            except Exception as err:
-                _LOGGER.error("Failed to send command to %s: %s", guid, err)
+            if mode_changed:
+                _LOGGER.debug("Sending mode/speed command to %s", getattr(device, "name", guid))
+                try:
+                    await hass.async_add_executor_job(device.send)
+                    _LOGGER.debug("Mode/speed command sent successfully")
+                    await asyncio.sleep(2)  # Даем облаку Tion время применить изменения режима
+                except Exception as err:
+                    _LOGGER.error("Failed to send mode/speed command to %s: %s", guid, err)
+
+            # --- ШАГ 2: Обогрев и температура ---
+            heater_changed = False
+            if target_temp is not None:
+                device.t_set = int(target_temp)
+                device.heater_enabled = True
+                if getattr(device, "speed", 0) == 0:
+                    device.speed = 1
+                heater_changed = True
+
+            if heat is not None:
+                device.heater_enabled = heat
+                if heat and getattr(device, "speed", 0) == 0:
+                    device.speed = 1
+                heater_changed = True
+
+            if heater_changed:
+                _LOGGER.debug("Sending heater/temp command to %s", getattr(device, "name", guid))
+                try:
+                    await hass.async_add_executor_job(device.send)
+                    _LOGGER.debug("Heater/temp command sent successfully")
+                except Exception as err:
+                    _LOGGER.error("Failed to send heater/temp command to %s: %s", guid, err)
+
+            hass.async_create_task(coordinator.async_fast_refresh())
 
     hass.services.async_register(
         DOMAIN,

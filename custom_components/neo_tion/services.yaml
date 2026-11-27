@@ -49,7 +49,6 @@ set_breezer:
       selector:
         select:
           options:
-            - "off"
-            - "horizontal"
-            - "vertical"
+            - "indoor"
+            - "outdoor"
             - "both"

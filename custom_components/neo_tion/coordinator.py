@@ -80,33 +80,15 @@ class TionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             cls_name = device.__class__.__name__
 
             if cls_name == "Breezer":
-                # --- БЛОК ДЛЯ ОТЛАДКИ ---
-                _LOGGER.debug("=== DEBUG BREEZER [%s] ===", getattr(device, "name", "Unknown"))
-                _LOGGER.debug("vars(device): %s", vars(device))
-                if hasattr(device, "state"):
-                    _LOGGER.debug("device.state: %s", getattr(device, "state"))
-                if hasattr(device, "data"):
-                    _LOGGER.debug("device.data: %s", getattr(device, "data"))
-                # -------------------------
+                # Используем точные имена переменных из debug-лога
+                in_temp = getattr(device, "_t_in", None)
+                out_temp = getattr(device, "_t_out", None)
+                heater_temp = getattr(device, "t_set", None)
+                heater_enabled = getattr(device, "heater_enabled", False)
 
-                # Пытаемся достать из разных мест, где могут лежать температуры
-                in_temp = getattr(device, "in_temp", None)
-                out_temp = getattr(device, "out_temp", None)
-                heater_temp = getattr(device, "heater_temp", None)
-                
-                # Если на верхнем уровне нет, ищем внутри state / data
-                state = getattr(device, "state", None)
-                if isinstance(state, dict):
-                    in_temp = in_temp or state.get("in_temp") or state.get("temp_in")
-                    out_temp = out_temp or state.get("out_temp") or state.get("temp_out")
-                    heater_temp = heater_temp or state.get("heater_temp") or state.get("target_temp")
-
-                heater_enabled = getattr(device, "heater", getattr(device, "heating", False))
-
-                # Скорости
                 speed = int(getattr(device, "speed", 0))
                 min_speed = int(getattr(device, "speed_min_set", 0))
-                max_speed = int(getattr(device, "speed_max_set", getattr(device, "speed_limit", 6)))
+                max_speed = int(getattr(device, "speed_max_set", getattr(device, "_speed_limit", 6)))
                 
                 zone = getattr(device, "zone", None)
                 swing = getattr(device, "swing", None)

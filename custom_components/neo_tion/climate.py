@@ -43,7 +43,8 @@ async def async_setup_entry(
 class TionBreezerClimate(TionEntity, ClimateEntity):
     """Representation of a Tion breezer as a climate entity."""
 
-    _attr_temperature_unit = UnitOfTemperature.CELSIUS
+    # Убрано предупреждение: _attr_temperature_unit -> _attr_native_temperature_unit
+    _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_target_temperature_step = 1
     _attr_min_temp = 10
     _attr_max_temp = 30
@@ -63,12 +64,14 @@ class TionBreezerClimate(TionEntity, ClimateEntity):
         self._attr_unique_id = f"{guid}_climate"
         self._last_speed: int = 1
 
+    # Убрано предупреждение: current_temperature -> native_current_temperature
     @property
-    def current_temperature(self) -> float | None:
+    def native_current_temperature(self) -> float | None:
         return self._device_data.get("current_temperature")
 
+    # Убрано предупреждение: target_temperature -> native_target_temperature
     @property
-    def target_temperature(self) -> float | None:
+    def native_target_temperature(self) -> float | None:
         return self._device_data.get("target_temperature")
 
     @property
@@ -81,7 +84,6 @@ class TionBreezerClimate(TionEntity, ClimateEntity):
 
     @property
     def hvac_action(self) -> HVACAction | None:
-        """Текущее действие: обогрев или просто вентиляция."""
         if not self._device_data.get("is_on"):
             return HVACAction.OFF
         if self._device_data.get("heater_enabled"):
@@ -148,8 +150,8 @@ class TionBreezerClimate(TionEntity, ClimateEntity):
         if command == "set_speed":
             device.speed = int(value)
         elif command == "set_temperature":
-            device.heater_temp = int(value)
-            device.heater = True  # Включаем обогрев при изменении целевой температуры
+            device.t_set = int(value)
+            device.heater_enabled = True  # Включаем обогрев
         elif command == "set_zone_mode":
             if getattr(device, "zone", None):
                 device.zone.mode = value

@@ -10,10 +10,10 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.const import (
-    CONCENTRATION_PARTS_PER_MILLION,
     PERCENTAGE,
     UnitOfTemperature,
 )
+from homeassistant.util.unit_conversion import UnitOfRatio
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -35,7 +35,8 @@ async def async_setup_entry(
 
         if device_type == "magicair":
             entities.extend([
-                TionSensor(coordinator, guid, name, device_type, "co2", "CO2", CONCENTRATION_PARTS_PER_MILLION, SensorDeviceClass.CO2),
+                # Заменено на UnitOfRatio.PARTS_PER_MILLION для убирания warning
+                TionSensor(coordinator, guid, name, device_type, "co2", "CO2", UnitOfRatio.PARTS_PER_MILLION, SensorDeviceClass.CO2),
                 TionSensor(coordinator, guid, name, device_type, "temperature", "Temperature", UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE),
                 TionSensor(coordinator, guid, name, device_type, "humidity", "Humidity", PERCENTAGE, SensorDeviceClass.HUMIDITY),
             ])
@@ -50,7 +51,7 @@ async def async_setup_entry(
                 TionSensor(coordinator, guid, name, device_type, "min_speed", "Fan Speed Min"),
                 TionSensor(coordinator, guid, name, device_type, "max_speed", "Fan Speed Max"),
                 TionSensor(coordinator, guid, name, device_type, "zone_mode", "Mode"),
-                TionSensor(coordinator, guid, name, device_type, "target_co2", "Target CO2", CONCENTRATION_PARTS_PER_MILLION, SensorDeviceClass.CO2),
+                TionSensor(coordinator, guid, name, device_type, "target_co2", "Target CO2", UnitOfRatio.PARTS_PER_MILLION, SensorDeviceClass.CO2),
                 TionSensor(coordinator, guid, name, device_type, "swing_mode", "Swing Mode"),
             ])
 

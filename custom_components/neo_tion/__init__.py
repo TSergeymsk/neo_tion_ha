@@ -52,12 +52,10 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         heat = call.data.get("heat")
         swing = call.data.get("swing")
 
-        # П.3: Если нет ни одного параметра, просто выходим
         if all(v is None for v in [mode, target_co2, speed, target_temp, heat, swing]):
             _LOGGER.debug("No parameters provided, exiting")
             return
 
-        # Получаем компонент климата для доступа к объектам сущностей
         climate_component = hass.data.get("entity_components", {}).get("climate")
         if not climate_component:
             _LOGGER.error("Climate component not found")
@@ -72,7 +70,6 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
             guid = entity._device_guid
             coordinator = None
             
-            # Находим нужный координатор
             for entry in hass.config_entries.async_entries(DOMAIN):
                 if guid in entry.runtime_data.devices:
                     coordinator = entry.runtime_data
@@ -89,19 +86,20 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
             _LOGGER.debug("Applying changes to %s", getattr(device, "name", guid))
 
-            # П.2: Если параметр не указан, не меняем его
             if mode:
                 if mode == "off":
-                    device.speed = 0
+                    device.is_on = False
                     if hasattr(device, "swing"):
                         device.swing.mode = "horizontal"
                 elif mode == "fan":
+                    device.is_on = True
                     device.zone.mode = "manual"
                     if speed is not None:
                         device.speed = int(speed)
                     elif getattr(device, "speed", 0) == 0:
                         device.speed = 1 
                 elif mode == "auto":
+                    device.is_on = True
                     device.zone.mode = "auto"
                     if speed is not None:
                         device.speed_min_set = 0
@@ -113,13 +111,16 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
                 if getattr(device, "zone", None):
                     device.zone.target_co2 = int(target_co2)
 
-            # Если скорость задана БЕЗ mode, принудительно ставим manual
+            # Если скорость задана БЕЗ mode, принудительно ставим manual и включаем
             if speed is not None and not mode:
+                device.is_on = True
                 device.zone.mode = "manual"
                 device.speed = int(speed)
 
             if target_temp is not None:
                 device.t_set = int(target_temp)
+                # При задании температуры обязательно включаем обогрев
+                device.heater_enabled = True
 
             if heat is not None:
                 device.heater_enabled = heat
@@ -137,7 +138,6 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
             try:
                 await hass.async_add_executor_job(device.send)
                 _LOGGER.debug("Command sent successfully")
-                # Запускаем обновление в фоне, чтобы не блокировать выполнение сервиса
                 hass.async_create_task(coordinator.async_fast_refresh())
             except Exception as err:
                 _LOGGER.error("Failed to send command to %s: %s", guid, err)

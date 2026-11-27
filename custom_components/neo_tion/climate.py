@@ -43,7 +43,6 @@ async def async_setup_entry(
 class TionBreezerClimate(TionEntity, ClimateEntity):
     """Representation of a Tion breezer as a climate entity."""
 
-    # Убрано предупреждение: _attr_temperature_unit -> _attr_native_temperature_unit
     _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_target_temperature_step = 1
     _attr_min_temp = 10
@@ -62,14 +61,13 @@ class TionBreezerClimate(TionEntity, ClimateEntity):
     def __init__(self, coordinator: TionDataUpdateCoordinator, guid: str, name: str) -> None:
         super().__init__(coordinator, guid, name, "breezer")
         self._attr_unique_id = f"{guid}_climate"
+        self._attr_name = None # Чтобы не было climate.bedroom_bedroom
         self._last_speed: int = 1
 
-    # Убрано предупреждение: current_temperature -> native_current_temperature
     @property
     def native_current_temperature(self) -> float | None:
         return self._device_data.get("current_temperature")
 
-    # Убрано предупреждение: target_temperature -> native_target_temperature
     @property
     def native_target_temperature(self) -> float | None:
         return self._device_data.get("target_temperature")
@@ -148,10 +146,11 @@ class TionBreezerClimate(TionEntity, ClimateEntity):
             raise ValueError(f"Breezer {self._device_guid} not found")
 
         if command == "set_speed":
+            device.is_on = int(value) > 0
             device.speed = int(value)
         elif command == "set_temperature":
             device.t_set = int(value)
-            device.heater_enabled = True  # Включаем обогрев
+            device.heater_enabled = True
         elif command == "set_zone_mode":
             if getattr(device, "zone", None):
                 device.zone.mode = value

@@ -59,13 +59,18 @@ class TionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _async_update_data(self) -> dict[str, Any]:
         try:
-            return await self.hass.async_add_executor_job(self._fetch_data_sync)
+            return await self.hass.async_add_executor_job(self._fetch_data_sync, False)
         except Exception as err:
             raise UpdateFailed(f"Error communicating with Tion API: {err}") from err
 
-    def _fetch_data_sync(self) -> dict[str, Any]:
+    def _fetch_data_sync(self, force: bool = False) -> dict[str, Any]:
         if self._api is None:
             self._api = create_tion_api(self._email, self._password)
+
+        if force:
+            # Сбрасываем кэш библиотеки tion, чтобы получить свежие данные с сервера
+            if hasattr(self._api, "_last_update"):
+                self._api._last_update = 0
 
         devices = self._api.get_devices()
         self._devices = {}
@@ -80,7 +85,6 @@ class TionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             cls_name = device.__class__.__name__
 
             if cls_name == "Breezer":
-                # Используем точные имена переменных из debug-лога
                 in_temp = getattr(device, "_t_in", None)
                 out_temp = getattr(device, "_t_out", None)
                 heater_temp = getattr(device, "t_set", None)
@@ -127,5 +131,10 @@ class TionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return data
 
     async def async_fast_refresh(self) -> None:
-        await asyncio.sleep(8)
-        await self.async_request_refresh()
+        """Принудительное обновление с обходом кэша."""
+        await asyncio.sleep(5)
+        try:
+            data = await self.hass.async_add_executor_job(self._fetch_data_sync, True)
+            self.async_set_updated_data(data)
+        except Exception as err:
+            _LOGGER.error("Force refresh failed: %s", err)
